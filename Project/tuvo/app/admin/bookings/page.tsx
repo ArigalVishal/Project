@@ -1,0 +1,554 @@
+"use client"
+
+import { useState, useEffect } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+import { 
+  Search, 
+  Filter, 
+  Download, 
+  Eye, 
+  Edit, 
+  Trash2,
+  Calendar,
+  User,
+  IndianRupee,
+  CreditCard,
+  CheckCircle,
+  XCircle,
+  Clock,
+  Mail,
+  Phone,
+  MapPin
+} from 'lucide-react'
+import { formatPrice, formatDate, formatTime } from '@/lib/utils'
+import { bookingsApi, Booking } from '@/lib/api/bookings'
+import { eventsApi, Event } from '@/lib/api/events'
+import { useAuth } from '@/contexts/AuthContext'
+
+// Sample bookings data
+const sampleBookings: Booking[] = [
+  {
+    $id: '1',
+    user_id: 'user1',
+    event_id: '1',
+    event_name: 'Tech Conference 2024',
+    event_date: '2024-02-15T10:00:00Z',
+    event_location: 'Convention Center, New York',
+    ticket_type: 'Regular',
+    quantity: 1,
+    amount: 299,
+    currency: 'USD',
+    payment_method: 'PayU',
+    payment_status: 'completed',
+    transaction_id: 'PAYU_MONEY_1234567',
+    booking_status: 'confirmed',
+    customer_name: 'John Doe',
+    customer_email: 'john.doe@example.com',
+    booking_date: '2024-01-15T10:00:00Z',
+    created_at: '2024-01-15T10:00:00Z',
+    updated_at: '2024-01-15T10:00:00Z'
+  },
+  {
+    $id: '2',
+    user_id: 'user2',
+    event_id: '2',
+    event_name: 'Music Festival 2024',
+    event_date: '2024-03-20T18:00:00Z',
+    event_location: 'Central Park, Los Angeles',
+    ticket_type: 'VIP',
+    quantity: 2,
+    amount: 398,
+    currency: 'USD',
+    payment_method: 'PayU',
+    payment_status: 'completed',
+    transaction_id: 'PAYU_MONEY_7654321',
+    booking_status: 'confirmed',
+    customer_name: 'Jane Smith',
+    customer_email: 'jane.smith@example.com',
+    booking_date: '2024-01-14T14:30:00Z',
+    created_at: '2024-01-14T14:30:00Z',
+    updated_at: '2024-01-14T14:30:00Z'
+  },
+  {
+    $id: '3',
+    user_id: 'user3',
+    event_id: '3',
+    event_name: 'Business Summit 2024',
+    event_date: '2024-04-10T09:00:00Z',
+    event_location: 'Business Center, Chicago',
+    ticket_type: 'Regular',
+    quantity: 1,
+    amount: 149,
+    currency: 'USD',
+    payment_method: 'PayU',
+    payment_status: 'pending',
+    transaction_id: 'PAYU_MONEY_456789123',
+    booking_status: 'pending',
+    customer_name: 'Mike Johnson',
+    customer_email: 'mike.johnson@example.com',
+    booking_date: '2024-01-13T09:15:00Z',
+    created_at: '2024-01-13T09:15:00Z',
+    updated_at: '2024-01-13T09:15:00Z'
+  },
+  {
+    $id: '4',
+    user_id: 'user4',
+    event_id: '4',
+    event_name: 'Art Exhibition 2024',
+    event_date: '2024-05-05T14:00:00Z',
+    event_location: 'Museum of Modern Art, Miami',
+    ticket_type: 'Student',
+    quantity: 1,
+    amount: 75,
+    currency: 'USD',
+    payment_method: 'PayU',
+    payment_status: 'completed',
+    transaction_id: 'PAYU_MONEY_321654987',
+    booking_status: 'confirmed',
+    customer_name: 'Sarah Wilson',
+    customer_email: 'sarah.wilson@example.com',
+    booking_date: '2024-01-12T16:45:00Z',
+    created_at: '2024-01-12T16:45:00Z',
+    updated_at: '2024-01-12T16:45:00Z'
+  }
+];
+
+// Sample events for reference
+const sampleEvents = [
+  { $id: '1', name: 'Tech Conference 2024' },
+  { $id: '2', name: 'Music Festival 2024' },
+  { $id: '3', name: 'Business Summit 2024' },
+  { $id: '4', name: 'Art Exhibition 2024' }
+]
+
+export default function BookingsPage() {
+  const { user } = useAuth()
+  const [bookings, setBookings] = useState<Booking[]>([])
+  const [events, setEvents] = useState<Event[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedStatus, setSelectedStatus] = useState('all')
+  const [selectedPaymentStatus, setSelectedPaymentStatus] = useState('all')
+  const [selectedEvent, setSelectedEvent] = useState('all')
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
+
+  // Load data from Appwrite
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true)
+        const [bookingsData, eventsData] = await Promise.all([
+          bookingsApi.getAll(),
+          eventsApi.getAll()
+        ])
+        setBookings(bookingsData)
+        setEvents(eventsData)
+      } catch (error) {
+        console.error('Error loading data:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadData()
+  }, [])
+
+  // Filter bookings based on search and filters
+  const filteredBookings = bookings.filter(booking => {
+    const matchesSearch = booking.customer_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         booking.customer_email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         booking.event_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                         booking.transaction_id.toLowerCase().includes(searchQuery.toLowerCase())
+    
+    const matchesStatus = selectedStatus === 'all' || booking.booking_status === selectedStatus
+    const matchesPaymentStatus = selectedPaymentStatus === 'all' || booking.payment_status === selectedPaymentStatus
+    const matchesEvent = selectedEvent === 'all' || booking.event_id === selectedEvent
+    
+    return matchesSearch && matchesStatus && matchesPaymentStatus && matchesEvent
+  })
+
+    const getEventName = (eventId: string) => {    
+    const event = events.find(e => e.$id === eventId)
+    return event?.name || 'Unknown Event'
+  }
+
+  const handleStatusChange = async (bookingId: string, newStatus: 'confirmed' | 'cancelled') => {
+    try {
+      const updatedBooking = await bookingsApi.update(bookingId, { booking_status: newStatus })
+      if (updatedBooking) {
+        setBookings(bookings.map(booking => 
+          booking.$id === bookingId ? updatedBooking : booking
+        ))
+      }
+    } catch (error) {
+      console.error('Error updating booking status:', error)
+    }
+  }
+
+  const handlePaymentStatusChange = async (bookingId: string, newPaymentStatus: 'pending' | 'completed' | 'failed') => {
+    try {
+      const updatedBooking = await bookingsApi.update(bookingId, { payment_status: newPaymentStatus })
+      if (updatedBooking) {
+        setBookings(bookings.map(booking => 
+          booking.$id === bookingId ? updatedBooking : booking
+        ))
+      }
+    } catch (error) {
+      console.error('Error updating payment status:', error)
+    }
+  }
+
+  const handleDeleteBooking = async (bookingId: string) => {
+    if (confirm('Are you sure you want to delete this booking?')) {
+      try {
+        const success = await bookingsApi.delete(bookingId)
+        if (success) {
+          setBookings(bookings.filter(booking => booking.$id !== bookingId))
+        }
+      } catch (error) {
+        console.error('Error deleting booking:', error)
+      }
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'confirmed': return 'bg-green-100 text-green-800'
+      case 'pending': return 'bg-yellow-100 text-yellow-800'
+      case 'cancelled': return 'bg-red-100 text-red-800'
+      case 'refunded': return 'bg-gray-100 text-gray-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const getPaymentStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return 'bg-green-100 text-green-800'
+      case 'pending': return 'bg-yellow-100 text-yellow-800'
+      case 'failed': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const totalRevenue = bookings
+    .filter(booking => booking.payment_status === 'completed')
+    .reduce((sum, booking) => sum + booking.amount, 0)
+
+  const confirmedBookings = bookings.filter(booking => booking.booking_status === 'confirmed').length
+  const pendingBookings = bookings.filter(booking => booking.booking_status === 'pending').length
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold">Bookings Management</h1>
+          <p className="text-muted-foreground">
+            Manage and track all event bookings
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline">
+            <Download className="h-4 w-4 mr-2" />
+            Export Data
+          </Button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Bookings</CardTitle>
+            <User className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{bookings.length}</div>
+            <p className="text-xs text-muted-foreground">
+              All time bookings
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Confirmed</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{confirmedBookings}</div>
+            <p className="text-xs text-muted-foreground">
+              Confirmed bookings
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <Clock className="h-4 w-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-yellow-600">{pendingBookings}</div>
+            <p className="text-xs text-muted-foreground">
+              Pending bookings
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <IndianRupee className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatPrice(totalRevenue, 'INR')}</div>
+            <p className="text-xs text-muted-foreground">
+              From completed payments
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search bookings..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+            <Select value={selectedEvent} onValueChange={setSelectedEvent}>
+              <SelectTrigger>
+                <SelectValue placeholder="Event" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Events</SelectItem>
+                                 {sampleEvents.map(event => (
+                   <SelectItem key={event.$id} value={event.$id}>{event.name}</SelectItem>
+                 ))}
+              </SelectContent>
+            </Select>
+            <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="confirmed">Confirmed</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="refunded">Refunded</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={selectedPaymentStatus} onValueChange={setSelectedPaymentStatus}>
+              <SelectTrigger>
+                <SelectValue placeholder="Payment" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Payments</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="failed">Failed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => {
+                setSearchQuery('')
+                setSelectedStatus('all')
+                setSelectedPaymentStatus('all')
+                setSelectedEvent('all')
+              }}
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Clear Filters
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Bookings Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>All Bookings</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {filteredBookings.map((booking) => (
+              <div key={booking.$id} className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                <div className="flex items-start md:items-center gap-4 md:flex-1">
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                       <p className="font-medium">{booking.customer_name}</p>
+                       <Badge className={getStatusColor(booking.booking_status)}>
+                         {booking.booking_status}
+                       </Badge>
+                       <Badge className={getPaymentStatusColor(booking.payment_status)}>
+                         {booking.payment_status}
+                       </Badge>
+                     </div>
+                     <p className="text-sm text-muted-foreground">{booking.event_name}</p>
+                     <p className="text-sm text-muted-foreground">{booking.customer_email}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between md:justify-end gap-3">
+                  <div className="text-right min-w-[140px]">
+                     <p className="font-medium">{formatPrice(booking.amount, 'INR')}</p>
+                     <p className="text-sm text-muted-foreground">{formatDate(booking.created_at || '')}</p>
+                   </div>
+                  <div className="flex gap-1">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => {
+                        setSelectedBooking(booking)
+                        setShowDetailsModal(true)
+                      }}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm">
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => handleDeleteBooking(booking.$id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Booking Details Modal */}
+      {showDetailsModal && selectedBooking && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-50 flex items-center justify-center">
+          <Card className="w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Booking Details</CardTitle>
+                <Button variant="ghost" size="sm" onClick={() => setShowDetailsModal(false)}>
+                  <XCircle className="h-4 w-4" />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+                             {/* Customer Information */}
+               <div>
+                 <h3 className="font-semibold mb-3">Customer Information</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Name</Label>
+                     <p className="font-medium">{selectedBooking.customer_name}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Email</Label>
+                     <p className="font-medium">{selectedBooking.customer_email}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Event</Label>
+                     <p className="font-medium">{selectedBooking.event_name}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Event Date</Label>
+                     <p className="font-medium">{formatDate(selectedBooking.event_date)}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Location</Label>
+                     <p className="font-medium">{selectedBooking.event_location}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Ticket Type</Label>
+                     <p className="font-medium">{selectedBooking.ticket_type}</p>
+                   </div>
+                 </div>
+               </div>
+
+                             {/* Booking Information */}
+               <div>
+                 <h3 className="font-semibold mb-3">Booking Information</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Booking ID</Label>
+                     <p className="font-medium">{selectedBooking.$id}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Transaction ID</Label>
+                     <p className="font-medium font-mono">{selectedBooking.transaction_id}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Booking Date</Label>
+                     <p className="font-medium">{formatDate(selectedBooking.booking_date)}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Created</Label>
+                     <p className="font-medium">{formatDate(selectedBooking.created_at || '')}</p>
+                   </div>
+                 </div>
+               </div>
+
+                             {/* Payment Information */}
+               <div>
+                 <h3 className="font-semibold mb-3">Payment Information</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Amount</Label>
+                     <p className="font-medium text-lg">{formatPrice(selectedBooking.amount)}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Currency</Label>
+                     <p className="font-medium">{selectedBooking.currency}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Payment Method</Label>
+                     <p className="font-medium">{selectedBooking.payment_method}</p>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Payment Status</Label>
+                     <Badge className={getPaymentStatusColor(selectedBooking.payment_status)}>
+                       {selectedBooking.payment_status}
+                     </Badge>
+                   </div>
+                   <div>
+                     <Label className="text-sm text-muted-foreground">Booking Status</Label>
+                     <Badge className={getStatusColor(selectedBooking.booking_status)}>
+                       {selectedBooking.booking_status}
+                     </Badge>
+                   </div>
+                 </div>
+               </div>
+
+              {/* Actions */}
+              <div className="flex justify-end gap-2 pt-4 border-t">
+                <Button variant="outline" onClick={() => setShowDetailsModal(false)}>
+                  Close
+                </Button>
+                <Button>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Booking
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+} 
